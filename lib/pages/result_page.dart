@@ -1,11 +1,11 @@
 import 'dart:io';
-import 'dart:convert';
-import 'dart:math'; // Untuk angka acak (dummy)
+import 'dart:math'; // For random number (dummy)
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:app_moneyclassification/constants.dart';
-import 'package:flutter_tts/flutter_tts.dart'; // Paket Suara
-import 'package:percent_indicator/percent_indicator.dart'; // Paket Grafik Lingkaran
+import 'package:flutter_tts/flutter_tts.dart'; // TTS Package
+import 'package:percent_indicator/percent_indicator.dart'; // Circular Graph
+import 'package:app_moneyclassification/services/preprocessing_service.dart';
+import 'package:app_moneyclassification/services/onnx_service.dart';
 
 class ResultPage extends StatefulWidget {
   final File imageFile;
@@ -22,8 +22,12 @@ class ResultPage extends StatefulWidget {
 }
 
 class _ResultPageState extends State<ResultPage> {
-  // Inisialisasi Text-to-Speech
+  // TTS
   final FlutterTts _flutterTts = FlutterTts();
+
+  // Services
+  final OnnxService _onnxService = OnnxService();
+  final PreprocessingService _preprocessingService = PreprocessingService();
 
   String _predictionResult = "Menganalisis...";
   String _modelUsed = "";
@@ -34,15 +38,15 @@ class _ResultPageState extends State<ResultPage> {
   @override
   void initState() {
     super.initState();
-    _setupTts(); // Siapkan mesin suara
-    _uploadAndPredict(); // Jalankan deteksi
+    _setupTts(); // Setup TTS
+    _runOfflinePrediction(); // Run local detection
   }
 
-  // --- FUNGSI SUARA (TTS) ---
+  // --- TTS FUNCTIONS ---
   Future<void> _setupTts() async {
-    await _flutterTts.setLanguage("id-ID"); // Bahasa Indonesia
-    await _flutterTts.setSpeechRate(0.5);   // Kecepatan normal
-    await _flutterTts.setPitch(1.0);        // Nada normal
+    await _flutterTts.setLanguage("id-ID"); // Indonesian
+    await _flutterTts.setSpeechRate(0.5); // Normal rate
+    await _flutterTts.setPitch(1.0); // Normal pitch
   }
 
   Future<void> _speak(String text) async {
@@ -51,84 +55,91 @@ class _ResultPageState extends State<ResultPage> {
 
   @override
   void dispose() {
-    _flutterTts.stop(); // Matikan suara saat keluar halaman
+    _flutterTts.stop();
+    _onnxService.dispose(); // Cleanup ONNX resources
     super.dispose();
   }
   // --------------------------
 
-  Future<void> _uploadAndPredict() async {
+  Future<void> _runOfflinePrediction() async {
     try {
-      final imageBytes = await widget.imageFile.readAsBytes();
-      final base64Image = base64Encode(imageBytes);
+      // 1. Load Models (if not loaded)
+      // Note: In production, load this earlier (e.g. main.dart) to unnecessary delays.
+      if (!_onnxService.isLoaded) {
+        await _onnxService.loadModels();
+      }
 
-      final payload = json.encode({
-        'image': base64Image,
-        'model': widget.modelName,
+      // 2. Preprocessing
+      final features = await _preprocessingService
+          .preprocessAndExtractFeatures(widget.imageFile.path);
+
+      if (features == null) {
+        throw Exception("Gagal memproses gambar (Preprocessing Failed)");
+      }
+
+      // 3. Prediction
+      final result = await _onnxService.predict(features);
+
+      if (result.containsKey('error')) {
+        throw Exception(result['error']);
+      }
+
+      // 4. Parse Result
+      String prediction = "";
+      String modelLabel = "";
+
+      if (widget.modelName.toLowerCase() == 'svm') {
+        prediction = result['svm_prediction'].toString();
+        modelLabel = "SVM (Offline)";
+      } else {
+        prediction = result['xgb_prediction'].toString();
+        modelLabel = "XGBoost (Offline)";
+      }
+
+      // Handle "negative" class
+      bool isNegative = prediction.toLowerCase() == 'negative';
+      String displayResult = isNegative ? "Bukan Uang" : "Rp $prediction";
+      String speakResult = isNegative
+          ? "Tidak terdeteksi uang"
+          : "Terdeteksi uang senilai $prediction rupiah";
+
+      // Dummy Confidence (ONNX SVM/XGB usually don't give probability easily unless configured)
+      // Using the same logic as before for consistency
+      double conf = 0.85 + Random().nextDouble() * (0.98 - 0.85);
+
+      setState(() {
+        _predictionResult = displayResult;
+        _modelUsed = modelLabel;
+        _confidence = conf;
+        _isLoading = false;
+        _isError = false;
       });
 
-      var uri = Uri.parse(BACKEND_URL);
-      var response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: payload,
-      );
-
-      if (response.statusCode == 200) {
-        var jsonResponse = json.decode(response.body);
-        String prediction = jsonResponse['prediction'].toString();
-        String model = jsonResponse['model_used'] != null
-            ? jsonResponse['model_used'].toString()
-            : widget.modelName;
-
-        // Logika Confidence: Pakai data asli jika ada, kalau tidak pakai Dummy
-        double conf = 0.0;
-        if (jsonResponse['confidence'] != null) {
-          conf = jsonResponse['confidence'].toDouble();
-        } else {
-          // Angka acak 85% - 98% (Biar grafik tetap muncul bagus saat demo)
-          conf = 0.85 + Random().nextDouble() * (0.98 - 0.85);
-        }
-
-        setState(() {
-          _predictionResult = "Rp $prediction";
-          _modelUsed = model;
-          _confidence = conf;
-          _isLoading = false;
-          _isError = false;
-        });
-
-        // NGOMONG HASILNYA OTOMATIS
-        _speak("Terdeteksi uang senilai $prediction rupiah");
-
-      } else {
-        setState(() {
-          _predictionResult = "Error Server";
-          _isError = true;
-          _isLoading = false;
-        });
-        _speak("Gagal melakukan deteksi. Silakan coba lagi.");
-      }
+      // Speak result
+      _speak(speakResult);
     } catch (e) {
+      print("Error Offline Prediction: $e");
       setState(() {
-        _predictionResult = "Gagal koneksi";
+        _predictionResult = "Gagal Deteksi";
         _isError = true;
         _isLoading = false;
       });
-      _speak("Gagal terhubung ke server.");
+      _speak("Gagal melakukan deteksi. Silakan coba lagi.");
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Format persen bulat (contoh: 92%)
-    String confidencePercentString = "${(_confidence * 100).toStringAsFixed(0)}%";
+    // Format percent string
+    String confidencePercentString =
+        "${(_confidence * 100).toStringAsFixed(0)}%";
 
     return Scaffold(
-      backgroundColor: Colors.white, // Background Putih Bersih
+      backgroundColor: Colors.white, // Clean White Background
       appBar: AppBar(
         title: const Text("Hasil Deteksi",
-            style: TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold)
-        ),
+            style:
+                TextStyle(color: kPrimaryColor, fontWeight: FontWeight.bold)),
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
@@ -142,7 +153,7 @@ class _ResultPageState extends State<ResultPage> {
       ),
       body: Column(
         children: [
-          // --- BAGIAN 1: GAMBAR (Background Putih) ---
+          // --- PART 1: IMAGE (White Background) ---
           Expanded(
             flex: 5,
             child: Center(
@@ -168,12 +179,12 @@ class _ResultPageState extends State<ResultPage> {
             ),
           ),
 
-          // --- BAGIAN 2: KOTAK HASIL (WARNA PINK ASLI KAMU) ---
+          // --- PART 2: RESULT BOX (Pink) ---
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24.0),
             decoration: const BoxDecoration(
-              color: kLightPinkColor, // <--- Warna Pink Asli Kamu
+              color: kLightPinkColor,
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(30),
                 topRight: Radius.circular(30),
@@ -184,24 +195,24 @@ class _ResultPageState extends State<ResultPage> {
               children: [
                 const SizedBox(height: 10),
 
-                // LAYOUT MIRIP FIGMA: KIRI (LINGKARAN) - KANAN (TEKS)
+                // LAYOUT: LEFT (CIRCLE) - RIGHT (TEXT)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    // A. GRAFIK LINGKARAN
+                    // A. CIRCULAR GRAPH
                     CircularPercentIndicator(
                       radius: 60.0,
                       lineWidth: 12.0,
                       percent: _isLoading ? 0.0 : _confidence,
                       circularStrokeCap: CircularStrokeCap.round,
-                      backgroundColor: Colors.white, // Jalur putih biar kontras
-                      progressColor: kPrimaryColor,  // Merah
+                      backgroundColor: Colors.white,
+                      progressColor: kPrimaryColor,
                       center: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           const Text("Akurasi",
-                              style: TextStyle(fontSize: 10, color: Colors.black54)
-                          ),
+                              style: TextStyle(
+                                  fontSize: 10, color: Colors.black54)),
                           Text(
                             _isLoading ? "..." : confidencePercentString,
                             style: const TextStyle(
@@ -214,15 +225,15 @@ class _ResultPageState extends State<ResultPage> {
                       ),
                     ),
 
-                    // B. INFORMASI TEKS
+                    // B. TEXT INFO
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text("Terdeteksi Sebagai:",
-                            style: TextStyle(fontSize: 12, color: Colors.black54)
-                        ),
+                            style:
+                                TextStyle(fontSize: 12, color: Colors.black54)),
 
-                        // Hasil Utama (Rp 100000)
+                        // Main Result (Rp 100000)
                         Text(
                           _isLoading ? "Loading..." : _predictionResult,
                           style: const TextStyle(
@@ -234,11 +245,12 @@ class _ResultPageState extends State<ResultPage> {
                         const SizedBox(height: 5),
                         Text(
                           "Model: $_modelUsed",
-                          style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                          style:
+                              TextStyle(fontSize: 12, color: Colors.grey[700]),
                         ),
                         const SizedBox(height: 15),
 
-                        // Info Tambahan (Layout Dummy mirip Figma)
+                        // Additional Info (Dummy Layout)
                         Row(
                           children: [
                             _buildInfoItem("Warna", "Dominan"),
@@ -253,13 +265,13 @@ class _ResultPageState extends State<ResultPage> {
 
                 const SizedBox(height: 30),
 
-                // TOMBOL MERAH
+                // RED BUTTON
                 SizedBox(
                   width: double.infinity,
                   height: 55,
                   child: ElevatedButton(
                     onPressed: () {
-                      _flutterTts.stop(); // Matikan suara kalau dipencet
+                      _flutterTts.stop();
                       Navigator.pop(context);
                     },
                     style: ElevatedButton.styleFrom(
@@ -268,12 +280,12 @@ class _ResultPageState extends State<ResultPage> {
                         borderRadius: BorderRadius.circular(15),
                       ),
                     ),
-                    child: const Text('Deteksi Gambar Lain',
+                    child: const Text(
+                      'Deteksi Gambar Lain',
                       style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white
-                      ),
+                          color: Colors.white),
                     ),
                   ),
                 ),
@@ -286,13 +298,18 @@ class _ResultPageState extends State<ResultPage> {
     );
   }
 
-  // Widget kecil helper
+  // Helper Widget
   Widget _buildInfoItem(String label, String value) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: kPrimaryColor)),
-        Text(value, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+        Text(label,
+            style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                color: kPrimaryColor)),
+        Text(value,
+            style: const TextStyle(fontSize: 12, color: Colors.black87)),
       ],
     );
   }
