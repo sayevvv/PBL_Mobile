@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:app_moneyclassification/constants.dart';
 import 'package:app_moneyclassification/pages/result_page.dart';
+import 'package:app_moneyclassification/pages/history_page.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+final supabase = Supabase.instance.client;
 
 class DetectionPage extends StatefulWidget {
   const DetectionPage({super.key});
@@ -49,6 +53,26 @@ class _DetectionPageState extends State<DetectionPage> {
       appBar: AppBar(
         title: const Text("Monerize"),
         automaticallyImplyLeading: false, // Hapus tombol kembali
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.history, color: kPrimaryColor),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const HistoryPage()),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout, color: kPrimaryColor),
+            onPressed: () async {
+              await supabase.auth.signOut();
+              if (mounted) {
+                Navigator.pushReplacementNamed(context, '/onboarding');
+              }
+            },
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -60,24 +84,25 @@ class _DetectionPageState extends State<DetectionPage> {
               width: double.infinity,
               height: 300,
               decoration: BoxDecoration(
-                color: kLightPinkColor,
+                color: Colors.white,
+                border: Border.all(color: kLightColor, width: 2),
                 borderRadius: BorderRadius.circular(30),
               ),
               child: _selectedImage == null
                   ? const Center(
-                child: Icon(
-                  Icons.image_outlined,
-                  size: 100,
-                  color: kPrimaryColor,
-                ),
-              )
+                      child: Icon(
+                        Icons.image_outlined,
+                        size: 100,
+                        color: kPrimaryColor,
+                      ),
+                    )
                   : ClipRRect(
-                borderRadius: BorderRadius.circular(30),
-                child: Image.file(
-                  _selectedImage!,
-                  fit: BoxFit.cover,
-                ),
-              ),
+                      borderRadius: BorderRadius.circular(30),
+                      child: Image.file(
+                        _selectedImage!,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
             ),
             const SizedBox(height: 30),
 
@@ -112,7 +137,6 @@ class _DetectionPageState extends State<DetectionPage> {
               ),
             ),
             const SizedBox(height: 32),
-
 
             // 4. Tombol Deteksi SVM
             SizedBox(

@@ -6,6 +6,7 @@ import 'package:flutter_tts/flutter_tts.dart'; // TTS Package
 import 'package:percent_indicator/percent_indicator.dart'; // Circular Graph
 import 'package:app_moneyclassification/services/preprocessing_service.dart';
 import 'package:app_moneyclassification/services/onnx_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ResultPage extends StatefulWidget {
   final File imageFile;
@@ -117,6 +118,14 @@ class _ResultPageState extends State<ResultPage> {
 
       // Speak result
       _speak(speakResult);
+
+      // Save to History
+      await _saveHistory(
+        prediction: prediction,
+        isNegative: isNegative,
+        modelName: modelLabel,
+        confidence: conf,
+      );
     } catch (e) {
       print("Error Offline Prediction: $e");
       setState(() {
@@ -125,6 +134,28 @@ class _ResultPageState extends State<ResultPage> {
         _isLoading = false;
       });
       _speak("Gagal melakukan deteksi. Silakan coba lagi.");
+    }
+  }
+
+  Future<void> _saveHistory({
+    required String prediction,
+    required bool isNegative,
+    required String modelName,
+    required double confidence,
+  }) async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user != null) {
+        await Supabase.instance.client.from('detection_history').insert({
+          'user_id': user.id,
+          'prediction_result': prediction,
+          'is_negative': isNegative,
+          'model_used': modelName,
+          'confidence': confidence,
+        });
+      }
+    } catch (e) {
+      print("Failed to save history: $e");
     }
   }
 
@@ -183,8 +214,21 @@ class _ResultPageState extends State<ResultPage> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24.0),
-            decoration: const BoxDecoration(
-              color: kLightPinkColor,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: const Border(
+                top: BorderSide(color: kLightColor, width: 3),
+                left: BorderSide(color: kLightColor, width: 1),
+                right: BorderSide(color: kLightColor, width: 1),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.1),
+                  blurRadius: 10,
+                  spreadRadius: 2,
+                  offset: const Offset(0, -5),
+                ),
+              ],
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(30),
                 topRight: Radius.circular(30),

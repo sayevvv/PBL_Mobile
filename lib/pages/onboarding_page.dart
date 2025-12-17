@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:app_moneyclassification/constants.dart';
+import 'package:app_moneyclassification/pages/login_page.dart';
 
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({super.key});
@@ -36,7 +37,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
                   // Halaman 2
                   OnboardingContent(
                     title: "Understand your money\nin seconds.",
-                    imageIcon: Icons.document_scanner_outlined, // Ganti dengan gambar Anda
+                    imageIcon: Icons
+                        .document_scanner_outlined, // Ganti dengan gambar Anda
                   ),
                 ],
               ),
@@ -62,8 +64,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
                         curve: Curves.ease,
                       );
                     } else {
-                      // Pindah ke Halaman Utama
-                      Navigator.pushReplacementNamed(context, '/home');
+                      // Pindah ke Halaman Login
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const LoginPage()),
+                      );
                     }
                   },
                   child: Text(_currentPage == 0 ? "Next" : "Get started"),
@@ -132,7 +138,8 @@ class OnboardingContent extends StatelessWidget {
           Expanded(
             child: Container(
               decoration: BoxDecoration(
-                color: kLightPinkColor,
+                color: Colors.white,
+                border: Border.all(color: kLightColor, width: 2),
                 borderRadius: BorderRadius.circular(30),
               ),
               child: Center(
