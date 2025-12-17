@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:app_moneyclassification/constants.dart';
 import 'package:app_moneyclassification/pages/login_page.dart';
+import 'package:app_moneyclassification/pages/detection_page.dart';
 
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({super.key});
@@ -32,13 +33,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
                   // Halaman 1
                   OnboardingContent(
                     title: "Welcome To\nMoney Categorizer",
-                    imageIcon: Icons.money_outlined, // Ganti dengan gambar Anda
+                    imagePath: 'assets/welcome/1.png',
                   ),
                   // Halaman 2
                   OnboardingContent(
                     title: "Understand your money\nin seconds.",
-                    imageIcon: Icons
-                        .document_scanner_outlined, // Ganti dengan gambar Anda
+                    imagePath: 'assets/welcome/2.png',
                   ),
                 ],
               ),
@@ -76,6 +76,37 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 ),
               ),
             ),
+            if (_currentPage == 1)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const DetectionPage()),
+                      );
+                    },
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: kPrimaryColor, width: 2),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                    child: const Text(
+                      "Continue as Guest",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: kPrimaryColor,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             const SizedBox(height: 20),
           ],
         ),
@@ -103,11 +134,13 @@ class OnboardingContent extends StatelessWidget {
   const OnboardingContent({
     super.key,
     required this.title,
-    required this.imageIcon,
+    this.imageIcon,
+    this.imagePath,
   });
 
   final String title;
-  final IconData imageIcon;
+  final IconData? imageIcon;
+  final String? imagePath;
 
   @override
   Widget build(BuildContext context) {
@@ -139,15 +172,22 @@ class OnboardingContent extends StatelessWidget {
             child: Container(
               decoration: BoxDecoration(
                 color: Colors.white,
-                border: Border.all(color: kLightColor, width: 2),
                 borderRadius: BorderRadius.circular(30),
               ),
               child: Center(
-                child: Icon(
-                  imageIcon,
-                  size: 150,
-                  color: kPrimaryColor.withOpacity(0.7),
-                ),
+                child: imagePath != null
+                    ? Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Image.asset(
+                          imagePath!,
+                          fit: BoxFit.contain,
+                        ),
+                      )
+                    : Icon(
+                        imageIcon ?? Icons.error,
+                        size: 150,
+                        color: kPrimaryColor.withOpacity(0.7),
+                      ),
               ),
             ),
           ),

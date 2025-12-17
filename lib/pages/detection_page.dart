@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:app_moneyclassification/constants.dart';
 import 'package:app_moneyclassification/pages/result_page.dart';
-import 'package:app_moneyclassification/pages/history_page.dart';
+import 'package:app_moneyclassification/pages/account_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 final supabase = Supabase.instance.client;
@@ -55,21 +55,12 @@ class _DetectionPageState extends State<DetectionPage> {
         automaticallyImplyLeading: false, // Hapus tombol kembali
         actions: [
           IconButton(
-            icon: const Icon(Icons.history, color: kPrimaryColor),
+            icon: const Icon(Icons.account_circle, color: kPrimaryColor),
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const HistoryPage()),
+                MaterialPageRoute(builder: (context) => const AccountPage()),
               );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout, color: kPrimaryColor),
-            onPressed: () async {
-              await supabase.auth.signOut();
-              if (mounted) {
-                Navigator.pushReplacementNamed(context, '/onboarding');
-              }
             },
           ),
         ],

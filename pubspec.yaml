@@ -68,6 +68,7 @@ flutter:
     - assets/models/model_params.json
     - assets/models/label_encoder_v3_auto.joblib
     - assets/models/svm_scaler_v3_auto.joblib
+    - assets/welcome/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
